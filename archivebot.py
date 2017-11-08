@@ -105,16 +105,18 @@ def handle_query(event):
         user: If you want to limit the search to one user, the username.
         channel: If you want to limit the search to one channel, the channel name.
         sort: Either asc if you want to search starting with the oldest messages,
-            or desc if you want to start from the newest. Default asc.
+            or desc if you want to start from the newest. Default desc.
         limit: The number of responses to return. Default 10.
+        context: The number of messages before and after the found message to return. Default 1.
     """
 
     try:
         text = []
         user = None
         channel = None
-        sort = None
+        sort = 'desc'
         limit = 10
+        context = 1
 
         params = event['text'].lower().split()
         for p in params:
@@ -147,8 +149,16 @@ def handle_query(event):
                         limit = int(p[1])
                     except:
                         raise ValueError('%s not a valid number' % p[1])
+                if p[0] == 'context':
+                    try:
+                        context = int(p[1])
+                        if context < 1:
+                            context = 1
+                    except:
+                        raise ValueError('%s not a valid number' % p[1])
 
-        query = 'SELECT message,user,timestamp FROM messages WHERE message LIKE "%%%s%%"' % " ".join(text)
+
+        query = 'SELECT message,user,timestamp,channel FROM messages WHERE message LIKE "%%%s%%"' % " ".join(text)
         if user:
             query += ' AND user="%s"' % user
         if channel:
@@ -162,13 +172,33 @@ def handle_query(event):
 
         res = cursor.fetchmany(limit)
         if res:
-            send_message('\n'.join(
-                ['%s (@%s, %s)' % (
-                    i[0], get_user_name(i[1]), convert_timestamp(i[2])
-                ) for i in res]
-            ), event['channel'])
+            if context > 1:
+                message = ''
+                for i in res:
+                    previous_messages = []
+                    query = 'SELECT message,user,timestamp FROM messages WHERE timestamp <= "%s" ORDER BY timestamp DESC' % (i[2],)
+                    cursor.execute(query)
+                    # the order needs to be reversed from DESC to ASC 
+                    for p in cursor.fetchmany(context):
+                        previous_messages.append(p)
+                    while previous_messages:
+                        p = previous_messages.pop()
+                        message += '%s (@%s, %s) \n' % (p[0], get_user_name(p[1]), convert_timestamp(p[2])) 
+
+                    query = 'SELECT message,user,timestamp FROM messages WHERE timestamp > "%s" ORDER BY timestamp ASC' % (i[2],)
+                    cursor.execute(query)
+                    # the order needs to be reversed from DESC to ASC 
+                    following_messages = cursor.fetchmany(context)
+                    message += '\n'.join( ['%s (@%s, %s)' % (p[0], get_user_name(p[1]), convert_timestamp(p[2])) for p in following_messages] )
+                    send_message(message, event['channel'])
+            else:
+                send_message('\n'.join(
+                    ['%s (@%s, %s)' % (
+                        i[0], get_user_name(i[1]), convert_timestamp(i[2])
+                    ) for i in res]
+                ), event['channel'])
         else:
-            send_message('No results found', event['channel'])
+            send_message('No results found ' + handle_query.__doc__, event['channel'])
     except ValueError as e:
         print(traceback.format_exc())
         send_message(str(e), event['channel'])

@@ -40,7 +40,7 @@ For example, sending the word "pizza" will return the first 10 messages that
 contain the word "pizza".  There are a number of parameters that can be provided
 to the query.  The full usage is:
 
-        <query> from:<user> in:<channel> sort:asc|desc limit:<number>
+        <query> from:<user> in:<channel> sort:asc|desc limit:<number> context:<number>
 
         query: The text to search for.
         user: If you want to limit the search to one user, the username.
@@ -48,6 +48,7 @@ to the query.  The full usage is:
         sort: Either asc if you want to search starting with the oldest messages,
             or desc if you want to start from the newest. Default asc.
         limit: The number of responses to return. Default 10.
+        context: The number of messages before and after the found message to return. Default 0.
 
 
 ## Contributing

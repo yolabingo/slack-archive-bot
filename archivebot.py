@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import datetime
 import os
 import sqlite3
@@ -107,7 +108,7 @@ def handle_query(event):
         sort: Either asc if you want to search starting with the oldest messages,
             or desc if you want to start from the newest. Default desc.
         limit: The number of responses to return. Default 10.
-        context: The number of messages before and after the found message to return. Default 1.
+        context: The number of messages before and after the found message to return. Default 0.
     """
 
     try:
@@ -116,7 +117,7 @@ def handle_query(event):
         channel = None
         sort = 'desc'
         limit = 10
-        context = 1
+        context = 0
 
         params = event['text'].lower().split()
         for p in params:
@@ -152,11 +153,13 @@ def handle_query(event):
                 if p[0] == 'context':
                     try:
                         context = int(p[1])
-                        if context < 1:
-                            context = 1
+                        if context < 0:
+                            context = 0
                     except:
                         raise ValueError('%s not a valid number' % p[1])
 
+        if " ".join(text) == "help":
+            send_message(handle_query.__doc__, event['channel'])
 
         query = 'SELECT message,user,timestamp,channel FROM messages WHERE message LIKE "%%%s%%"' % " ".join(text)
         if user:
@@ -172,20 +175,21 @@ def handle_query(event):
 
         res = cursor.fetchmany(limit)
         if res:
-            if context > 1:
-                message = ''
+            if context:
+		counter = 1
                 for i in res:
+                    message = ''
                     previous_messages = []
-                    query = 'SELECT message,user,timestamp FROM messages WHERE timestamp <= "%s" ORDER BY timestamp DESC' % (i[2],)
+                    query = 'SELECT message,user,timestamp FROM messages WHERE channel="%s" AND timestamp <= "%s" ORDER BY timestamp DESC' % (i[3], i[2])
                     cursor.execute(query)
                     # the order needs to be reversed from DESC to ASC 
-                    for p in cursor.fetchmany(context):
+                    for p in cursor.fetchmany(context + 1):
                         previous_messages.append(p)
                     while previous_messages:
                         p = previous_messages.pop()
                         message += '%s (@%s, %s) \n' % (p[0], get_user_name(p[1]), convert_timestamp(p[2])) 
 
-                    query = 'SELECT message,user,timestamp FROM messages WHERE timestamp > "%s" ORDER BY timestamp ASC' % (i[2],)
+                    query = 'SELECT message,user,timestamp FROM messages WHERE channel="%s" AND timestamp > "%s" ORDER BY timestamp ASC' % (i[3], i[2])
                     cursor.execute(query)
                     # the order needs to be reversed from DESC to ASC 
                     following_messages = cursor.fetchmany(context)

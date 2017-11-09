@@ -5,6 +5,7 @@ import sqlite3
 import time
 import traceback
 
+from string import Template
 from slackclient import SlackClient
 from websocket import WebSocketConnectionClosedException
 
@@ -182,26 +183,26 @@ def handle_query(event):
         all_messages = []
         if res:
             if context:
-                for i in res:
+                for (msg, user, timestamp, channel) in res:
                     message = ''
                     previous_messages = []
-                    query = 'SELECT message,user,timestamp FROM messages WHERE channel="%s" AND timestamp <= "%s" ORDER BY timestamp DESC' % (i[3], i[2])
+                    query = 'SELECT message,user,timestamp FROM messages WHERE channel="%s" AND timestamp <= "%s" ORDER BY timestamp DESC' % (channel, timestamp)
                     cursor.execute(query)
                     # the order needs to be reversed from DESC to ASC 
                     for p in cursor.fetchmany(context + 1):
                         previous_messages.append(p)
                     while previous_messages:
                         p = previous_messages.pop()
-                        message += '%s (@%s, %s) \n' % (p[0], get_user_name(p[1]), convert_timestamp(p[2])) 
+                        message += format_results(p[0], p[1], channel, p[2])
 
-                    query = 'SELECT message,user,timestamp FROM messages WHERE channel="%s" AND timestamp > "%s" ORDER BY timestamp ASC' % (i[3], i[2])
+                    query = 'SELECT message,user,timestamp FROM messages WHERE channel="%s" AND timestamp > "%s" ORDER BY timestamp ASC' % (channel, timestamp)
                     cursor.execute(query)
                     # the order needs to be reversed from DESC to ASC 
                     following_messages = cursor.fetchmany(context)
-                    message += '\n'.join( ['%s (@%s, %s)' % (p[0], get_user_name(p[1]), convert_timestamp(p[2])) for p in following_messages] )
+                    message += '\n'.join([format_results(p[0], p[1], channel, p[2]) for p in following_messages])
                     all_messages.append(message)
             else:
-                all_messages = '\n'.join( ['%s (@%s, %s)' % ( i[0], get_user_name(i[1]), convert_timestamp(i[2])) for i in res])
+                all_messages = '\n'.join([format_results(msg, user, channel, timestamp) for i in res])
         else:
             all_messages = 'No results found ' + handle_query.__doc__
         send_message(all_messages, event['channel'])
@@ -209,6 +210,8 @@ def handle_query(event):
         print(traceback.format_exc())
         send_message(str(e), event['channel'])
 
+def format_results(msg, user, channel, ts):
+    return('%s (@%s in #%s, %s) \n' % (msg, get_user_name(user), get_channel_name(channel), convert_timestamp(ts)))
 
 def handle_message(event):
     try:

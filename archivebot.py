@@ -83,6 +83,16 @@ def get_channel_id(name):
     return ENV['channel_id'].get(name, None)
 
 def send_message(message, channel):
+    print("send_message")
+    print(message)
+    print(type(message))
+    if isinstance(message, list):
+        msg_str = ''
+        counter = 1
+        for m in message:
+            msg_str += '*Message %s*\n%s\n' %(counter, m.strip())
+            counter += 1 
+        message = msg_str
     sc.api_call(
       "chat.postMessage",
       channel=channel,
@@ -172,11 +182,11 @@ def handle_query(event):
         print(query)
         cursor.execute(query)
         res = cursor.fetchmany(limit)
-        all_results = []
+        all_messages = []
         if res:
             if context:
                 for i in res:
-                    message = []
+                    message = ''
                     previous_messages = []
                     query = 'SELECT message,user,timestamp FROM messages WHERE channel="%s" AND timestamp <= "%s" ORDER BY timestamp DESC' % (i[3], i[2])
                     cursor.execute(query)
@@ -192,16 +202,12 @@ def handle_query(event):
                     # the order needs to be reversed from DESC to ASC 
                     following_messages = cursor.fetchmany(context)
                     message += '\n'.join( ['%s (@%s, %s)' % (p[0], get_user_name(p[1]), convert_timestamp(p[2])) for p in following_messages] )
-                    send_message(message, event['channel'])
+                    all_messages.append(message)
             else:
-                matched_messages = 
-                send_message('\n'.join(
-                    ['%s (@%s, %s)' % (
-                        i[0], get_user_name(i[1]), convert_timestamp(i[2])
-                    ) for i in res]
-                ), event['channel'])
+                all_messages = '\n'.join( ['%s (@%s, %s)' % ( i[0], get_user_name(i[1]), convert_timestamp(i[2])) for i in res])
         else:
-            send_message('No results found ' + handle_query.__doc__, event['channel'])
+            all_messages = 'No results found ' + handle_query.__doc__
+        send_message(all_messages, event['channel'])
     except ValueError as e:
         print(traceback.format_exc())
         send_message(str(e), event['channel'])

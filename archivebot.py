@@ -82,7 +82,7 @@ def get_channel_id(name):
         update_channels()
     return ENV['channel_id'].get(name, None)
 
-def send_message(message, channel, highlight=None):
+def send_message(message, channel):
     if isinstance(message, list):
         msg_str = ''
         counter = 1
@@ -90,8 +90,6 @@ def send_message(message, channel, highlight=None):
             msg_str += '*Message %s*\n%s\n' %(counter, m.strip())
             counter += 1 
         message = msg_str
-    if highlight:
-        message = message.replace(highlight, '*%s*' % (highlight,))
     sc.api_call(
       "chat.postMessage",
       channel=channel,
@@ -206,7 +204,7 @@ def handle_query(event):
                 all_messages = '\n'.join( ['%s (@%s, %s)' % ( i[0], get_user_name(i[1]), convert_timestamp(i[2])) for i in res])
         else:
             all_messages = 'No results found ' + handle_query.__doc__
-        send_message(all_messages, event['channel'], " ".join(text))
+        send_message(all_messages, event['channel'])
     except ValueError as e:
         print(traceback.format_exc())
         send_message(str(e), event['channel'])

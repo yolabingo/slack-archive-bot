@@ -87,7 +87,7 @@ def send_message(message, channel):
         msg_str = ''
         counter = 1
         for m in message:
-            msg_str += '*Message %s*\n%s\n' %(counter, m.strip())
+            msg_str += '*Message Thread %s*\n%s\n' %(counter, m.strip())
             counter += 1 
         message = msg_str
     sc.api_call(

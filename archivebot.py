@@ -100,7 +100,7 @@ def handle_query(event):
 
     Usage:
 
-        <query> from:<user> in:<channel> sort:asc|desc limit:<number>
+        <query> from:<user> in:<channel> sort:asc|desc limit:<number> context:<number>
 
         query: The text to search for.
         user: If you want to limit the search to one user, the username.
@@ -170,15 +170,13 @@ def handle_query(event):
             query += ' ORDER BY timestamp %s' % sort
 
         print(query)
-
         cursor.execute(query)
-
         res = cursor.fetchmany(limit)
+        all_results = []
         if res:
             if context:
-		counter = 1
                 for i in res:
-                    message = ''
+                    message = []
                     previous_messages = []
                     query = 'SELECT message,user,timestamp FROM messages WHERE channel="%s" AND timestamp <= "%s" ORDER BY timestamp DESC' % (i[3], i[2])
                     cursor.execute(query)
@@ -196,6 +194,7 @@ def handle_query(event):
                     message += '\n'.join( ['%s (@%s, %s)' % (p[0], get_user_name(p[1]), convert_timestamp(p[2])) for p in following_messages] )
                     send_message(message, event['channel'])
             else:
+                matched_messages = 
                 send_message('\n'.join(
                     ['%s (@%s, %s)' % (
                         i[0], get_user_name(i[1]), convert_timestamp(i[2])
@@ -207,7 +206,16 @@ def handle_query(event):
         print(traceback.format_exc())
         send_message(str(e), event['channel'])
 
+
 def handle_message(event):
+    try:
+        if event['subtype'] == 'message_changed':
+            # rely on 'ON CONFLICT REPLACE' for messages table
+            event['text'] = event['message']['text']
+            event['user'] = event['previous_message']['user']
+            event['ts'] = event['previous_message']['ts']
+    except KeyError:
+        pass
     if 'text' not in event:
         return
     if 'username' in event and event['username'] == 'bot':

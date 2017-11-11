@@ -164,7 +164,7 @@ def handle_query(event):
         if " ".join(text) == "help":
             send_slack_message(handle_query.__doc__, event['channel'])
 
-        query = 'SELECT message,user,timestamp,channel FROM messages WHERE message LIKE "%%%s%%"' % " ".join(text)
+        query = 'SELECT message,user,timestamp,channel FROM messages WHERE message LIKE "%%%s%%"' % "%%".join(text)
         if user:
             query += ' AND user="%s"' % user
         if channel:
@@ -172,7 +172,7 @@ def handle_query(event):
         if sort:
             query += ' ORDER BY timestamp %s' % sort
 
-        # print(query)
+        print(query)
         cursor.execute(query)
         res = cursor.fetchmany(limit)
         msg_txt = ''

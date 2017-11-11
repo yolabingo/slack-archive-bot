@@ -83,24 +83,19 @@ def get_channel_id(name):
         update_channels()
     return ENV['channel_id'].get(name, None)
 
-def send_message(message, channel):
-    if isinstance(message, list):
-        msg_str = ''
-        counter = 1
-        for m in message:
-            msg_str += '*Message Thread %s*\n%s\n' %(counter, m.strip())
-            counter += 1 
-        message = msg_str
+def convert_timestamp(ts):
+    return datetime.datetime.fromtimestamp(
+        int(ts.split('.')[0])
+    ).strftime('%Y-%m-%d %H:%M:%S')
+
+def send_slack_message(message, channel):
+    if not message:
+        message = 'No results found ' + handle_query.__doc__
     sc.api_call(
       "chat.postMessage",
       channel=channel,
       text=message
     )
-
-def convert_timestamp(ts):
-    return datetime.datetime.fromtimestamp(
-        int(ts.split('.')[0])
-    ).strftime('%Y-%m-%d %H:%M:%S')
 
 def handle_query(event):
     """
@@ -167,7 +162,7 @@ def handle_query(event):
                         raise ValueError('%s not a valid number' % p[1])
 
         if " ".join(text) == "help":
-            send_message(handle_query.__doc__, event['channel'])
+            send_slack_message(handle_query.__doc__, event['channel'])
 
         query = 'SELECT message,user,timestamp,channel FROM messages WHERE message LIKE "%%%s%%"' % " ".join(text)
         if user:
@@ -177,41 +172,39 @@ def handle_query(event):
         if sort:
             query += ' ORDER BY timestamp %s' % sort
 
-        print(query)
+        # print(query)
         cursor.execute(query)
         res = cursor.fetchmany(limit)
-        all_messages = []
-        if res:
-            if context:
-                for (msg, user, timestamp, channel) in res:
-                    message = ''
-                    previous_messages = []
-                    query = 'SELECT message,user,timestamp FROM messages WHERE channel="%s" AND timestamp <= "%s" ORDER BY timestamp DESC' % (channel, timestamp)
-                    cursor.execute(query)
-                    # the order needs to be reversed from DESC to ASC 
-                    for p in cursor.fetchmany(context + 1):
-                        previous_messages.append(p)
-                    while previous_messages:
-                        p = previous_messages.pop()
-                        message += format_results(p[0], p[1], channel, p[2])
+        msg_txt = ''
+        if context:
+            for (msg, user, timestamp, channel) in res:
+                if msg_txt:
+                    msg_txt += "\n=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-\n"
+                # get this message and the messages immediately preceeding it from channel
+                cursor.execute('SELECT message,user,timestamp,channel FROM messages WHERE channel="%s" AND timestamp <= "%s" ORDER BY timestamp DESC' % (channel, timestamp))
+                # reverse from DESC so they are chronological
+                # if len(res) > 1:
+                msg_txt += format_results(reversed([i for i in cursor.fetchmany(context + 1)]))
 
-                    query = 'SELECT message,user,timestamp FROM messages WHERE channel="%s" AND timestamp > "%s" ORDER BY timestamp ASC' % (channel, timestamp)
-                    cursor.execute(query)
-                    # the order needs to be reversed from DESC to ASC 
-                    following_messages = cursor.fetchmany(context)
-                    message += '\n'.join([format_results(p[0], p[1], channel, p[2]) for p in following_messages])
-                    all_messages.append(message)
-            else:
-                all_messages = '\n'.join([format_results(msg, user, channel, timestamp) for i in res])
+                # get messages immediately folliwing from channel
+                cursor.execute('SELECT message,user,timestamp,channel FROM messages WHERE channel="%s" AND timestamp > "%s" ORDER BY timestamp ASC' % (channel, timestamp))
+                msg_txt += format_results(cursor.fetchmany(context))
         else:
-            all_messages = 'No results found ' + handle_query.__doc__
-        send_message(all_messages, event['channel'])
+            msg_txt = format_results(res)
+        send_slack_message(msg_txt, event['channel'])
     except ValueError as e:
         print(traceback.format_exc())
-        send_message(str(e), event['channel'])
+        send_slack_message(str(e), event['channel'])
 
-def format_results(msg, user, channel, ts):
-    return('%s (@%s in #%s, %s) \n' % (msg, get_user_name(user), get_channel_name(channel), convert_timestamp(ts)))
+def format_results(result):
+    """
+    convert results from 'SELECT message,user,timestamp FROM messages...' sqlite fetchmany() into text string
+    """
+    message = ''
+    for (msg, user, timestamp, channel) in result:
+        message += '%s (@%s in #%s, %s) \n' % (msg, get_user_name(user), get_channel_name(channel), convert_timestamp(timestamp))
+    print(message.strip())
+    return(message.strip())
 
 def handle_message(event):
     try:

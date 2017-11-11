@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import datetime
 import os
+import re
 import sqlite3
 import time
 import traceback
@@ -172,39 +173,59 @@ def handle_query(event):
         if sort:
             query += ' ORDER BY timestamp %s' % sort
 
-        print(query)
         cursor.execute(query)
         res = cursor.fetchmany(limit)
         msg_txt = ''
         if context:
             for (msg, user, timestamp, channel) in res:
                 if msg_txt:
-                    msg_txt += "\n=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-\n"
-                # get this message and the messages immediately preceeding it from channel
-                cursor.execute('SELECT message,user,timestamp,channel FROM messages WHERE channel="%s" AND timestamp <= "%s" ORDER BY timestamp DESC' % (channel, timestamp))
+                    msg_txt += "\n@-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-@\n"
+                # get messages immediately preceeding from channel
+                cursor.execute('SELECT message,user,timestamp,channel FROM messages WHERE channel="%s" AND timestamp < "%s" ORDER BY timestamp DESC' % (channel, timestamp))
                 # reverse from DESC so they are chronological
                 # if len(res) > 1:
                 msg_txt += format_results(reversed([i for i in cursor.fetchmany(context + 1)]))
+
+                # matched message
+                msg_txt += format_results((msg, user, timestamp, channel), text)
 
                 # get messages immediately folliwing from channel
                 cursor.execute('SELECT message,user,timestamp,channel FROM messages WHERE channel="%s" AND timestamp > "%s" ORDER BY timestamp ASC' % (channel, timestamp))
                 msg_txt += format_results(cursor.fetchmany(context))
         else:
-            msg_txt = format_results(res)
+            msg_txt = format_results(res, text)
         send_slack_message(msg_txt, event['channel'])
     except ValueError as e:
         print(traceback.format_exc())
         send_slack_message(str(e), event['channel'])
 
-def format_results(result):
+def format_results(result, highlight=False):
     """
     convert results from 'SELECT message,user,timestamp FROM messages...' sqlite fetchmany() into text string
     """
     message = ''
-    for (msg, user, timestamp, channel) in result:
+    try:
+        for (msg, user, timestamp, channel) in result:
+            if highlight:
+                msg = highlight_search_string(msg, highlight)
+            message += '%s (@%s in #%s, %s) \n' % (msg, get_user_name(user), get_channel_name(channel), convert_timestamp(timestamp))
+    except ValueError:
+        msg = result[0]
+        user = result[1]
+        timestamp = result[2]
+        channel = result[3]
+        if highlight:
+            msg = highlight_search_string(msg, highlight)
         message += '%s (@%s in #%s, %s) \n' % (msg, get_user_name(user), get_channel_name(channel), convert_timestamp(timestamp))
-    print(message.strip())
     return(message.strip())
+
+def highlight_search_string(txt, highlight):
+    """
+    try and display matched text in bold font
+    """
+    print('\s[-/.()]?(' + '\s+'.join(highlight) + ')[-/.()]?\s')
+    regex = re.compile(r'\s([-/.()]?' + '\s+'.join(highlight) + '[-/.()]?)\s', re.IGNORECASE)
+    return(regex.sub(r' *\1* ', txt))
 
 def handle_message(event):
     try:

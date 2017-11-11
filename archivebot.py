@@ -187,7 +187,7 @@ def handle_query(event):
                 msg_txt += format_results(reversed([i for i in cursor.fetchmany(context + 1)]))
 
                 # matched message
-                msg_txt += format_results((msg, user, timestamp, channel), text)
+                msg_txt += format_results((msg, user, timestamp, channel), text) 
 
                 # get messages immediately folliwing from channel
                 cursor.execute('SELECT message,user,timestamp,channel FROM messages WHERE channel="%s" AND timestamp > "%s" ORDER BY timestamp ASC' % (channel, timestamp))
@@ -217,14 +217,13 @@ def format_results(result, highlight=False):
         if highlight:
             msg = highlight_search_string(msg, highlight)
         message += '%s (@%s in #%s, %s) \n' % (msg, get_user_name(user), get_channel_name(channel), convert_timestamp(timestamp))
-    return(message.strip())
+    return(message)
 
 def highlight_search_string(txt, highlight):
     """
     try and display matched text in bold font
     """
-    print('\s[-/.()]?(' + '\s+'.join(highlight) + ')[-/.()]?\s')
-    regex = re.compile(r'\s([-/.()]?' + '\s+'.join(highlight) + '[-/.()]?)\s', re.IGNORECASE)
+    regex = re.compile(r'\s([-/().?!]?' + '\s+'.join(highlight) + '[-/().?!]?)\s', re.IGNORECASE)
     return(regex.sub(r' *\1* ', txt))
 
 def handle_message(event):
